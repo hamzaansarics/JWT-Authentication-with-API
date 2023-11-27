@@ -1,0 +1,100 @@
+How to setup JWT Authentication in Restful API .NET Core
+
+Step 1:
+Install the following packegs from Nuget according to your .NET Core version
+ -Microsoft.AspNetCore.Authantication.JwtBearer
+ -System.IdentityModel.Tokens.Jwt
+ -Microsoft.EntityFrameworkCore
+ -Microsoft.EntityFrameworkCore.Relational
+ -Microsoft.EntityFrameworkCore.Design
+ -Microsoft.EntityFrameworkCore.SqlServer
+ -Microsoft.EntityFrameworkCore.Tools
+ 
+NOTE: First two packges only required for JWT and remaining packages for Entityframework database configurtions, if you want to work with other database except SqlServer you can install accordingly or you can also test without database packages
+
+Step 2:
+Create a class which handle the authatication/security key with minimum property
+
+  public class JWTSettings
+  {
+      public string securitykey {  get; set; }    
+  }
+
+Step 3:
+Add the configurations in appsetting.json file
+
+  "JWTSettings": {
+    "securitykey": "thisismycustomesecretkeywhichiscreatedbymyselfyoucan"
+  }
+
+Step 4:
+Add the Connection string in appsetting.json file
+
+ "ConnectionStrings": {
+   "DefualConnection": "Server=your_server_name;Database=Your_databasename;Integrated Security=True; TrustServerCertificate=True;"
+ }
+
+Step 5:
+Add the ModelsContext class for database configuration and also execute the migrations for database
+
+Step 6:
+Adding the UserController for Authantication and token genrations
+  private readonly JWTSettings settings;
+  public UserController(JWT_APIContext context,IOptions<JWTSettings> options)
+  {
+      _context = context;
+      settings = options.Value;
+  }
+  [HttpPost("Authanticate")]
+  public IActionResult Authanticate(UserModel userModel)
+  {
+      var result = _context.users.FirstOrDefault(x => x.UserName == userModel.UserName && x.Password == userModel.Password);
+      if(result!=null)
+      {
+          var tokenhandler = new JwtSecurityTokenHandler();
+          var tokenkey = Encoding.UTF8.GetBytes(settings.securitykey);
+          var tokendescriptor = new SecurityTokenDescriptor
+          {
+              Subject = new ClaimsIdentity(
+                  new Claim[]
+                  {
+                      new Claim(ClaimTypes.Name, userModel.UserName),
+                  }),
+              Expires = DateTime.Now.AddMinutes(2),
+              SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(tokenkey), SecurityAlgorithms.HmacSha256)
+          };
+          var token = tokenhandler.CreateToken(tokendescriptor);
+          string finaltoken = tokenhandler.WriteToken(token);
+          return Ok(finaltoken);
+      }
+      return Unauthorized();
+     
+  }
+
+Step 7:
+Adding and registring the services in program.cs class
+var _jwtsettings = builder.Configuration.GetSection("JWTSettings");
+builder.Services.Configure<JWTSettings>(_jwtsettings);
+string authkey = builder.Configuration.GetSection("JWTSettings:securitykey").Value;
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = true;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = false,
+        ValidateAudience = false,
+       // ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        //ValidIssuer = "your-issuer",       // Change this to your own issuer
+        //ValidAudience = "your-audience",   // Change this to your own audience
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(authkey)) // Change this to your own secret key
+    };
+});
+
+NOTE:
+If you don't work with databases then you can skip the databases packages in the step 1 which are mentioned & also Step 4,5(databases configurations)

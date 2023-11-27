@@ -1,4 +1,5 @@
 How to setup JWT Authentication in Restful API .NET Core
+::Simple JWT Token base Authantications
 
 Step 1:
 Install the following packegs from Nuget according to your .NET Core version
@@ -95,6 +96,39 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(authkey)) // Change this to your own secret key
     };
 });
+
+
+::Role base Authantications
+If you want to do role base authantication then the class which are you using for username & password and that must have another column which define roles, In the Authorize(Roles="admin") attribute pass the roles only those user there role is admin can be access thorough genrated token other user can have also valid token but they can't access the authorized fields, there is also need to add the claims in the Authanticate method as given below steps,
+
+i) Authorize(Roles="admin"){ ... }
+ii)  public IActionResult Authanticate(UserModel userModel)
+  {
+      var result = _context.users.FirstOrDefault(x => x.UserName == userModel.UserName && x.Password == userModel.Password);
+      if(result!=null)
+      {
+          var tokenhandler = new JwtSecurityTokenHandler();
+          var tokenkey = Encoding.UTF8.GetBytes(settings.securitykey);
+          var tokendescriptor = new SecurityTokenDescriptor
+          {
+              Subject = new ClaimsIdentity(
+                  new Claim[]
+                  {
+                      new Claim(ClaimTypes.Name, userModel.UserName),
+                      new Claim(ClaimTypes.Role,result.role) //Only this claim added 
+                  }),
+              Expires = DateTime.Now.AddMinutes(2),
+              SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(tokenkey), SecurityAlgorithms.HmacSha256)
+          };
+          var token = tokenhandler.CreateToken(tokendescriptor);
+          string finaltoken = tokenhandler.WriteToken(token);
+          return Ok(finaltoken);
+      }
+      return Unauthorized();
+     
+  }
+
+
 
 NOTE:
 If you don't work with databases then you can skip the databases packages in the step 1 which are mentioned & also Step 4,5(databases configurations)
